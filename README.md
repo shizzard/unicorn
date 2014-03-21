@@ -28,4 +28,5 @@ ToDo
 Things to do are:
 
  - `unicorn_worker:do_diff/2` should build diffs between two nested proplists;
- - `unicorn_worker:do_notify/2` should notify all subscribers.
+ - `unicorn_worker:do_notify/2` should notify all subscribers;
+ - build `unicorn_client.hrl` header file with notify messages described.
