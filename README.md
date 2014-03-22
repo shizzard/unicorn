@@ -10,17 +10,18 @@ Unicorn is a basic config server that is responsible for your applications confi
 
 Most simple workflow is:
 
- - `unicorn:use/1` to start config file worker;
+ - `unicorn:load/1` to start config file worker;
  - `unicorn:subscribe/2` to subscribe for config changes;
  - `unicorn:unsubscribe/1,2` to unsubscribe;
  - `unicorn:reload/1` to reload config and notify all subscribers.
+ - `unicorn:unload/1` to terminate worker.
 
 Multiple subscriptions is not an error: subscriber will receive multiple messages by number of subscriptions on config change.
 
 Development usage
 =================
 
-Clone repository, run `make dev` and use standalone app.
+Clone repository, collect deps (actually, `etoml`), run `make dev` and use standalone app.
 
 Load `priv/test.toml` file and subscribe for changes:
 
