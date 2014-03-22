@@ -110,3 +110,5 @@ ToDo
 Things to do are:
 
  - Write documentation
+ - Write specs
+ - Write tests
