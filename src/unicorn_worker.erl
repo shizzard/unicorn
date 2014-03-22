@@ -52,13 +52,18 @@ init([File, ProcName]) ->
 
 
 
-handle_call(?SUBSCRIBE(Pid, Path), _From, #state{subscribers = Subscribers} = State) ->
-    ?DBG("~p subscribed for ~p:~p", [Pid, State#state.procname, Path]),
-    Ref = erlang:monitor(process, Pid),
-    NewState = State#state{
-        subscribers = Subscribers ++ [{Pid, Path, Ref}]
-    },
-    {reply, ok, NewState};
+handle_call(?SUBSCRIBE(Pid, Path), _From, #state{document = Document, subscribers = Subscribers} = State) ->
+    case  unicorn:get(Path, Document) of
+        undefined ->
+            {reply, {error, not_found}, State};
+        Value ->
+            ?DBG("~p subscribed for ~p:~p", [Pid, State#state.procname, Path]),
+            Ref = erlang:monitor(process, Pid),
+            NewState = State#state{
+                subscribers = Subscribers ++ [{Pid, Path, Ref}]
+            },
+            {reply, {ok, Value}, NewState}
+    end;
 
 handle_call(?UNSUBSCRIBE(Pid), _From, #state{subscribers = Subscribers} = State) ->
     ?DBG("~p unsubscribed for ~p", [Pid, State#state.procname]),
