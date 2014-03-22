@@ -4,7 +4,7 @@
 
 -export([dev_start/0]).
 
--export([use/1, subscribe/2, unsubscribe/1, unsubscribe/2, reload/1]).
+-export([load/1, unload/1, subscribe/2, unsubscribe/1, unsubscribe/2, reload/1, get/2]).
 
 
 
@@ -12,13 +12,25 @@
 
 
 
-use(File) when is_binary(File) ->
-    case supervisor:start_child(unicorn_sup, [File]) of
-        {ok, _Pid} ->
-            ok;
-        {error, Reason} ->
-            {error, Reason}
+load(File) when is_binary(File) ->
+    ProcName = ?FILE_TO_NAME(File),
+    case whereis(ProcName) of
+        undefined ->
+            case supervisor:start_child(unicorn_sup, [File]) of
+                {ok, _Pid} ->
+                    ok;
+                {error, Reason} ->
+                    {error, Reason}
+            end;
+        _Pid ->
+            ok
     end.
+
+
+
+unload(File) when is_binary(File) ->
+    ProcName = ?FILE_TO_NAME(File),
+    gen_server:cast(ProcName, ?TERMINATE).
 
 
 
@@ -41,6 +53,22 @@ unsubscribe(File, Path) when is_binary(File), is_list(Path) ->
 reload(File) when is_binary(File) ->
     ProcName = ?FILE_TO_NAME(File),
     gen_server:call(ProcName, ?RELOAD).
+
+
+
+get([], Document) ->
+    Document;
+
+get([Key | Keys], Document) when is_list(Document) ->
+    case proplists:get_value(Key, Document) of
+        undefined ->
+            undefined;
+        Value ->
+            get(Keys, Value)
+    end;
+
+get([_Key | _Keys], _Document) ->
+    undefined.
 
 
 

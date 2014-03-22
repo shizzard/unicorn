@@ -3,9 +3,9 @@
 -define(SUBSCRIBE(Pid, Path), {subscribe, Pid, Path}).
 -define(UNSUBSCRIBE(Pid), {unsubscribe, Pid}).
 -define(UNSUBSCRIBE(Pid, Path), {unsubscribe, Pid, Path}).
-
--define(RELOAD, reload).
--define(LIST_SUBSCRIBERS, list_subscribers).
+-define(RELOAD, {reload}).
+-define(LIST_SUBSCRIBERS, {list_subscribers}).
+-define(TERMINATE, {terminate}).
 
 -ifdef(DEBUG).
     -define(DBG(Msg), ?DBG(Msg, [])).

@@ -3,6 +3,7 @@
 -behaviour(gen_server).
 
 -include("unicorn.hrl").
+-include("unicorn_client.hrl").
 
 
 
@@ -87,15 +88,16 @@ handle_call(?UNSUBSCRIBE(Pid, Path), _From, #state{subscribers = Subscribers} = 
 
 handle_call(?RELOAD, _From, #state{file = File, document = Document, subscribers = Subscribers} = State) ->
     ?DBG("~p received reload signal", [State#state.procname]),
-    {Reply, NewState} = case load_document(File) of
-        {ok, NewDocument} ->
-            Diff = do_diff(Document, NewDocument),
-            NumNotified = do_notify(Diff, Subscribers),
-            ?DBG("~p notified ~p subscribers", [State#state.procname, NumNotified]),
-            {{ok, NumNotified}, #state{
-                document = Document
-            }};
-        {error, Reason} ->
+    {Reply, NewState} = try
+        {ok, NewDocument} = load_document(File),
+        Diff = do_diff(File, Document, NewDocument),
+        ?DBG("Diff for file ~p: ~p", [File, Diff]),
+        NumNotified = do_notify(File, Diff, NewDocument, Subscribers),
+        ?DBG("~p notified ~p subscribers", [State#state.procname, NumNotified]),
+        {{ok, NumNotified}, State#state{
+            document = NewDocument
+        }}
+    catch error:{error, Reason} ->
             ?DBG("~p got error on reload: ", [State#state.procname, Reason]),
             {{error, Reason}, State}
     end,
@@ -109,6 +111,12 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
+
+handle_cast(?TERMINATE, #state{file = File, subscribers = Subscribers} = State) ->
+    lists:foreach(fun({Pid, Path, _Ref}) ->
+        Pid ! ?UNICORN_TERMINATE(File, Path)
+    end, Subscribers),
+    {stop, normal, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -152,25 +160,25 @@ code_change(_OldVsn, State, _Extra) ->
 
 load_document(File) ->
     case file:read_file(File) of
-        {ok, Document} ->
+        {ok, RawDocument} ->
             Type = detect_file_type(File),
-            parse_document(File, Type, Document);
+            parse_document(File, Type, RawDocument);
         {error, Reason} ->
-            {error, {unable_to_read, File, Reason}}
+            erlang:error({error, {unable_to_read, File, Reason}})
     end.
 
 
 
-parse_document(File, etoml, Document) ->
-    case etoml:parse(Document) of
+parse_document(File, etoml, RawDocument) ->
+    case etoml:parse(RawDocument) of
+        {ok, Document} ->
+            {ok, Document};
         {error, Reason} ->
-            {error, {unable_to_parse, File, Reason}};
-        {ok, Contents} ->
-            {ok, Contents}
+            erlang:error({error, {unable_to_parse, File, Reason}})
     end;
 
 parse_document(File, unknown, _Document) ->
-    {error, {unable_to_parse, File, unknown_type}}.
+    erlang:error({error, {unable_to_parse, File, unknown_type}}).
 
 
 
@@ -184,13 +192,74 @@ detect_file_type(File) ->
 
 
 
-do_diff(_Document, _NewDocument) ->
-    [].
+do_diff(File, Document, NewDocument) ->
+    do_diff(File, [], Document, NewDocument).
+
+do_diff(File, Path, Document, NewDocument) ->
+    IsProplist = is_proplist(Document),
+    if
+        IsProplist ->
+            do_diff_proplist(File, Path, Document, NewDocument);
+        is_list(Document) ->
+            do_diff_list(File, Path, Document, NewDocument);
+        true ->
+            do_diff_etc(File, Path, Document, NewDocument)
+    end.
 
 
 
-do_notify(_Diff, _Subscribers) ->
-    0.
+do_diff_proplist(File, Path, Document, NewDocument) ->
+    is_proplist(Document) andalso is_proplist(NewDocument) orelse
+        erlang:error({invalid_proplist, File, Path}),
+    lists:foldl(fun({Key, Value}, Acc) ->
+        proplists:is_defined(Key, NewDocument) orelse
+            erlang:error({unexistent_key, File, Path ++ [Key]}),
+        Neighbor = proplists:get_value(Key, NewDocument),
+        case do_diff(File, Path ++ [Key], Value, Neighbor) of
+            [] -> Acc;
+            SubDiff -> Acc ++ [{Key, SubDiff}]
+        end
+    end, [], Document).
+
+
+
+do_diff_list(_File, _Path, Document, NewDocument) when is_list(Document), is_list(NewDocument) ->
+    NewDocument;
+
+do_diff_list(File, Path, _Document, _NewDocument) ->
+    erlang:error({invalid_list, File, Path}).
+
+
+
+do_diff_etc(_File, _Path, Document, NewDocument) when Document =:= NewDocument ->
+    [];
+
+do_diff_etc(_File, _Path, _Document, NewDocument) ->
+    NewDocument.
+
+
+
+do_notify(File, Diff, Document, Subscribers) ->
+    lists:foldl(fun({Pid, Path, _Ref}, Acc) ->
+        case unicorn:get(Path, Diff) of
+            undefined ->
+                Acc;
+            Value ->
+                Pid ! ?UNICORN_NOTIFY(File, Path, Value, unicorn:get(Path, Document)),
+                Acc + 1
+        end
+    end, 0, Subscribers).
+
+
+
+is_proplist(Item) when is_list(Item) ->
+    lists:all(fun
+        ({_, _}) -> true;
+        (_) -> false
+    end, Item);
+
+is_proplist(_Item) ->
+    false.
 
 
 

@@ -26,7 +26,7 @@ start_link() ->
 init([]) ->
     ChildSpecs = [{
         unicorn_worker, {unicorn_worker, start_link, []},
-        permanent, brutal_kill, worker, [unicorn_worker]
+        transient, brutal_kill, worker, [unicorn_worker]
     }],
     {ok, {{simple_one_for_one, 1000, 3600}, ChildSpecs}}.
 
