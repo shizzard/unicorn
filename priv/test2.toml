@@ -1,0 +1,25 @@
+version = "2.7.13"
+
+[database]
+    server = "1.2.3.4"
+    port = 1234
+    pool_size = 200
+    max_overflow = 0
+
+[binding]
+    [binding.proto1]
+        port = 8713
+        conn_timeout = 500
+    [binding.proto2]
+        port = 7714
+        conn_timeout = 450
+
+[worker]
+    [worker.proto1]
+        pool_size = 300
+        max_overflow = 200
+        transaction_loglevel = 2
+    [worker.proto2]
+        pool_size = 400
+        max_overflow = 200
+        transaction_loglevel = 4

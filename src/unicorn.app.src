@@ -1,0 +1,11 @@
+{application, unicorn, [
+    {description, "Configuration server"},
+    {vsn, "0.1"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {mod, {unicorn_app, []}},
+    {env, []}
+]}.
