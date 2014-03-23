@@ -1,7 +1,7 @@
 all: compile
 
 dev: dev_compile
-	erl -sname unicorn -cookie unicorn -pa ebin -pa deps/etoml/ebin -s unicorn dev_start
+	erl -sname unicorn -cookie unicorn -pa ebin -s unicorn dev_start
 
 compile:
 	rebar compile
