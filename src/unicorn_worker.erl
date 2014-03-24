@@ -8,7 +8,7 @@
 
 
 %% API
--export([start_link/2]).
+-export([start_link/3]).
 
 %% gen_server callbacks
 -export([
@@ -22,7 +22,8 @@
 
 -record(state, {
     file :: unicorn:filename(),
-    loader :: function(),
+    loader :: unicorn:loader(),
+    validator :: unicorn:validator(),
     procname :: atom(),
     document :: unicorn:document(),
     subscribers = [] :: list(subscriber())
@@ -34,48 +35,49 @@
 
 
 
--spec start_link(File :: unicorn:filename(), Loader :: unicorn:loader()) ->
+-spec start_link(File :: unicorn:filename(), Loader :: unicorn:loader(), Validator :: unicorn:validator()) ->
     {ok, Pid :: pid()} | ignore | {error, Error :: any()}.
-start_link(File, Loader) ->
+start_link(File, Loader, Validator) ->
     ProcName = ?FILE_TO_NAME(File),
     ?DBG("~p started for '~p' file", [ProcName, File]),
-    gen_server:start_link({local, ProcName}, ?MODULE, [File, ProcName, Loader], []).
+    gen_server:start_link({local, ProcName}, ?MODULE, [File, ProcName, Loader, Validator], []).
 
 
 
 -spec init(Args :: list()) ->
     {ok, State :: #state{}} | {error, Error :: any()}.
-init([File, ProcName, Loader]) ->
-    case load_document(File, Loader) of
-        {ok, Document} ->
-            {ok, #state{
-                file = File,
-                loader = Loader,
-                procname = ProcName,
-                document = Document
-            }};
-        {error, Reason} ->
-            {stop, Reason}
+init([File, ProcName, Loader, Validator]) ->
+    try
+        {ok, Document} = load_document(File, Loader, Validator),
+        {ok, #state{
+            file = File,
+            loader = Loader,
+            validator = Validator,
+            procname = ProcName,
+            document = Document
+        }}
+    catch error:{error, Reason} ->
+        {stop, Reason}
     end.
 
 
 
 -spec handle_call(Message :: any(), From :: pid(), State :: #state{}) ->
     {reply, Reply :: any(), State :: #state{}}.
-handle_call(?SUBSCRIBE(Pid, Path), _From, #state{document = Document, subscribers = Subscribers} = State) ->
-    case  unicorn:get(Path, Document) of
+handle_call(?SUBSCRIBE(Pid, Path), _From, State) ->
+    case  unicorn:get(Path, State#state.document) of
         undefined ->
             {reply, {error, not_found}, State};
         Value ->
             ?DBG("~p subscribed for ~p:~p", [Pid, State#state.procname, Path]),
             Ref = erlang:monitor(process, Pid),
             NewState = State#state{
-                subscribers = Subscribers ++ [{Pid, Path, Ref}]
+                subscribers = State#state.subscribers ++ [{Pid, Path, Ref}]
             },
             {reply, {ok, Value}, NewState}
     end;
 
-handle_call(?UNSUBSCRIBE(Pid), _From, #state{subscribers = Subscribers} = State) ->
+handle_call(?UNSUBSCRIBE(Pid), _From, State) ->
     ?DBG("~p unsubscribed for ~p", [Pid, State#state.procname]),
     NewState = State#state{
         subscribers = lists:filter(fun
@@ -84,11 +86,11 @@ handle_call(?UNSUBSCRIBE(Pid), _From, #state{subscribers = Subscribers} = State)
                 false;
             ({_, _, _}) ->
                 true
-        end, Subscribers)
+        end, State#state.subscribers)
     },
     {reply, ok, NewState};
 
-handle_call(?UNSUBSCRIBE(Pid, Path), _From, #state{subscribers = Subscribers} = State) ->
+handle_call(?UNSUBSCRIBE(Pid, Path), _From, State) ->
     ?DBG("~p unsubscribed for ~p:~p", [Pid, State#state.procname, Path]),
     NewState = State#state{
         subscribers = lists:filter(fun
@@ -97,18 +99,18 @@ handle_call(?UNSUBSCRIBE(Pid, Path), _From, #state{subscribers = Subscribers} = 
                 false;
             ({_, _, _}) ->
                 true
-        end, Subscribers)
+        end, State#state.subscribers)
     },
     {reply, ok, NewState};
 
-handle_call(?RELOAD, _From, #state{file = File, loader = Loader, document = Document, subscribers = Subscribers} = State) ->
+handle_call(?RELOAD, _From, State) ->
     ?DBG("~p received reload signal", [State#state.procname]),
     {Reply, NewState} = try
-        {ok, NewDocument} = load_document(File, Loader),
-        NumNotified = case do_diff(File, Document, NewDocument) of
+        {ok, NewDocument} = load_document(State#state.file, State#state.loader, State#state.validator),
+        NumNotified = case do_diff(State#state.file, State#state.document, NewDocument) of
             {ok, Diff} ->
-                ?DBG("Diff for file ~p: ~p", [File, Diff]),
-                do_notify(File, Diff, NewDocument, Subscribers);
+                ?DBG("Diff for file ~p: ~p", [State#state.file, Diff]),
+                do_notify(State#state.file, Diff, NewDocument, State#state.subscribers);
             {error, empty} ->
                 0
         end,
@@ -117,13 +119,13 @@ handle_call(?RELOAD, _From, #state{file = File, loader = Loader, document = Docu
             document = NewDocument
         }}
     catch error:{error, Reason} ->
-            ?DBG("~p got error on reload: ", [State#state.procname, Reason]),
+            ?DBG("~p got error on reload: ~p", [State#state.procname, Reason]),
             {{error, Reason}, State}
     end,
     {reply, Reply, NewState};
 
-handle_call(?LIST_SUBSCRIBERS, _From, #state{subscribers = Subscribers} = State) ->
-    {reply, Subscribers, State};
+handle_call(?LIST_SUBSCRIBERS, _From, State) ->
+    {reply, State#state.subscribers, State};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -185,12 +187,22 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 
--spec load_document(File :: unicorn:filename(), Loader :: unicorn:loader()) ->
+-spec load_document(File :: unicorn:filename(), Loader :: unicorn:loader(), Validator :: unicorn:validator()) ->
     {ok, Document :: unicorn:document()}.
-load_document(File, Loader) ->
+load_document(File, Loader, Validator) ->
     case file:read_file(File) of
         {ok, RawDocument} ->
-            {ok, Loader(File, RawDocument)};
+            case Loader(RawDocument) of
+                {ok, Document0} ->
+                    case Validator(Document0) of
+                        {ok, Document1} ->
+                            {ok, Document1};
+                        {error, ErrorList} ->
+                            erlang:error({error, {unable_to_validate, File, ErrorList}})
+                    end;
+                {error, Reason} ->
+                    erlang:error({error, {unable_to_load, File, Reason}})
+            end;
         {error, Reason} ->
             erlang:error({error, {unable_to_read, File, Reason}})
     end.
