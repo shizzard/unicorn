@@ -8,10 +8,10 @@ version = "2.7.13"
 
 [binding]
     [binding.proto1]
-        port = 7713
+        ports = [7713, 7714, 7715]
         conn_timeout = 500
     [binding.proto2]
-        port = 7714
+        ports = [8713, 8714, 8715]
         conn_timeout = 450
 
 [worker]

@@ -7,10 +7,10 @@
 -define(LIST_SUBSCRIBERS, {list_subscribers}).
 -define(TERMINATE, {terminate}).
 
--ifdef(DEBUG).
+-ifdef(UNICORN_DEVEL).
     -define(DBG(Msg), ?DBG(Msg, [])).
     -define(DBG(Msg, Args), io:format("[unicorn debug] " ++ Msg ++ "~n", Args)).
 -else.
-    -define(DBG(Msg), ?DBG(Msg, [])).
-    -define(DBG(_Msg, _Args), ok).
+    -define(DBG(Msg), 'stubbed_?DBG_call').
+    -define(DBG(_Msg, _Args), 'stubbed_?DBG_call').
 -endif.
