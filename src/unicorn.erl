@@ -256,7 +256,6 @@ is_proplist(_Item) ->
         end;
 
     jiffy_validator(validate, [<<"binding">>, _, <<"ports">>, _], Value) ->
-        ?DBG("Ports: ~p", [Value]),
         if
             Value < 65536, Value > 0 ->
                 {ok, valid};
@@ -283,8 +282,7 @@ is_proplist(_Item) ->
     jiffy_validator(validate, _, _) ->
         {ok, valid};
 
-    jiffy_validator(fix, Path, Value) ->
-        ?DBG("FIX ~p -> ~p", [Path, Value]),
+    jiffy_validator(fix, _, _) ->
         {error, invalid}.
 
 
