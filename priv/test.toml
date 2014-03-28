@@ -7,10 +7,10 @@ version = "2.7.13"
     max_overflow = 200
 
 [binding]
-    [binding.proto1]
+    [proto1]
         ports = [770014, 7715, 7716]
         conn_timeout = 500
-    [binding.proto2]
+    [proto2]
         ports = [8713, 8714, 8715]
         conn_timeout = 450
 

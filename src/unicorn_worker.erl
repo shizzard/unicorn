@@ -66,9 +66,9 @@ init([File, ProcName, Loader, Validator]) ->
     {reply, Reply :: any(), State :: #state{}}.
 handle_call(?SUBSCRIBE(Pid, Path), _From, State) ->
     case  unicorn:get(Path, State#state.document) of
-        undefined ->
+        {error, undefined} ->
             {reply, {error, not_found}, State};
-        Value ->
+        {ok, Value} ->
             ?DBG("~p subscribed for ~p:~p", [Pid, State#state.procname, Path]),
             Ref = erlang:monitor(process, Pid),
             NewState = State#state{
