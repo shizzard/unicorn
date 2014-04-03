@@ -1,6 +1,6 @@
 {application,unicorn,
              [{description,"Configuration server"},
-              {vsn,"0.1"},
+              {vsn,"0.2.1"},
               {registered,[]},
               {applications,[kernel,stdlib]},
               {mod,{unicorn_app,[]}},

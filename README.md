@@ -6,7 +6,7 @@ Unicorn is a basic config server that gives you ability to subscribe your applic
 Usage
 =====
 
-Unicorn app consists of a root supervisor and a number of workers. When you load config file another workers starts and serves your requests.
+Unicorn app consists of a root supervisor and a number of workers. When you load config file another worker starts and serves your requests.
 
 Interface:
 
@@ -54,7 +54,12 @@ Validator is another function, that is passed to `unicorn:load/3` function. Vali
 
 The one argument of validator function is `unicorn:document/0` term. Function should return `{ok, Document} | {error, ErrorList}`. As validation routines are optional, you can use `fun(Document) -> {ok, Document} end.` fun to stub validation.
 
-`ErrorList` is obviously a list of errors. This list will return on erroneous `unicorn:load/3` and `unicorn:reload/1` calls.
+`ErrorList` is obviously a list of errors. This list will be returned on erroneous `unicorn:load/3` and `unicorn:reload/1` calls.
+
+Events
+======
+
+Events are described in `include/unicorn_client.hrl` file. Those two events are obvious and will be sent to corresponding process in config reload and config unload respectively.
 
 Test usage
 ==========
@@ -76,7 +81,7 @@ rebar -Crebar_dev.config -DUNICORN_DEVEL compile
 ==> jiffy_v (compile)==> unicorn (compile)erl -sname unicorn -cookie unicorn -pa ebin -pa deps/etoml/ebin -pa deps/jiffy_v/ebin -s unicorn dev_startErlang R16B03-1 (erts-5.10.4) [source] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false]
 
 Eshell V5.10.4  (abort with ^G)
-(unicorn@shizz-worktop)1> unicorn:load(<<"priv/test.toml">>).
+(unicorn@shizz-worktop)1> unicorn:load(<<"priv/test.toml">>, fun unicorn:dev_loader/1, fun unicorn:dev_validator/1).
 [unicorn debug] 'priv/test.toml' started for '<<"priv/test.toml">>' file
 ok
 (unicorn@shizz-worktop)2> unicorn:subscribe(<<"priv/test.toml">>, [<<"database">>]).
