@@ -11,9 +11,11 @@
 -type document() :: document_object() | document_list() | document_scalar().
 -type document_object() :: {list({Key :: document_scalar(), Value :: document()})}.
 -type document_list() :: list(Item :: document()).
--type document_scalar() :: binary() | integer() | float() | atom().
+-type document_scalar() :: binary() | integer() | float() | boolean().
+
 -type loader() :: fun((binary()) -> {ok, document()} | error()).
 -type validator() :: fun((document()) -> {ok, document()} | error()).
+
 -type filename() :: binary().
 -type path() :: list(document_scalar()).
 -type error() :: {error, Reason :: any()}.

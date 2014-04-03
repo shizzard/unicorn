@@ -44,8 +44,11 @@ start_link(File, Loader, Validator) ->
 
 
 
--spec init(Args :: list()) ->
-    {ok, State :: #state{}} | {error, Error :: any()}.
+-spec init(Args :: term()) ->
+    {ok, State :: #state{}} |
+    {ok, State :: #state{}, timeout() | hibernate} |
+    {stop, Reason :: term()} |
+    ignore.
 init([File, ProcName, Loader, Validator]) ->
     try
         {ok, Document} = load_document(File, Loader, Validator),
@@ -62,8 +65,13 @@ init([File, ProcName, Loader, Validator]) ->
 
 
 
--spec handle_call(Message :: any(), From :: pid(), State :: #state{}) ->
-    {reply, Reply :: any(), State :: #state{}}.
+-spec handle_call(Request :: term(), From :: {pid(), Tag :: term()}, State :: #state{}) ->
+    {reply, Reply :: term(), NewState :: #state{}} |
+    {reply, Reply :: term(), NewState :: #state{}, timeout() | hibernate} |
+    {noreply, NewState :: #state{}} |
+    {noreply, NewState :: #state{}, timeout() | hibernate} |
+    {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
+    {stop, Reason :: term(), NewState :: #state{}}.
 handle_call(?SUBSCRIBE(Pid, Path), _From, State) ->
     case  unicorn:get(Path, State#state.document) of
         {error, undefined} ->
@@ -133,8 +141,10 @@ handle_call(_Request, _From, State) ->
 
 
 
--spec handle_cast(Message :: any(), State :: #state{}) ->
-    {noreply, State :: #state{}} | {stop, normal, State :: #state{}}.
+-spec handle_cast(Request :: term(), State :: #state{}) ->
+    {noreply, NewState :: #state{}} |
+    {noreply, NewState :: #state{}, timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: #state{}}.
 handle_cast(?TERMINATE, #state{file = File, subscribers = Subscribers} = State) ->
     lists:foreach(fun({Pid, Path, _Ref}) ->
         Pid ! ?UNICORN_TERMINATE(File, Path)
@@ -146,8 +156,10 @@ handle_cast(_Msg, State) ->
 
 
 
--spec handle_info(Message :: any(), State :: #state{}) ->
-    {noreply, State :: #state{}}.
+-spec handle_info(Info :: timeout() | term(), State :: #state{}) ->
+    {noreply, NewState :: #state{}} |
+    {noreply, NewState :: #state{}, timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: #state{}}.
 handle_info({'DOWN', Ref, process, Pid, _Info}, #state{subscribers = Subscribers} = State) ->
     ?DBG("~p got subscriber ~p down: ~p", [State#state.procname, Pid, _Info]),
     NewState = State#state{
@@ -215,7 +227,7 @@ do_diff(File, Document, NewDocument) ->
     do_diff(File, [], Document, NewDocument).
 
 -spec do_diff(File :: unicorn:filename(), Path :: unicorn:path(), Document :: unicorn:document(), NewDocument :: unicorn:document()) ->
-    Document :: unicorn:document().
+    Document :: unicorn:document() | {error, empty}.
 do_diff(File, Path, {DocumentPL}, {NewDocumentPL}) ->
     Diff = lists:foldl(fun({Key, Value}, {Acc}) ->
         proplists:is_defined(Key, NewDocumentPL) orelse
