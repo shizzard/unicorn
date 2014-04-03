@@ -1,40 +1,81 @@
 unicorn
 =======
 
-Simple config-server.
+Unicorn is a basic config server that gives you ability to subscribe your application processes to exact parts of config file (or files) and read events when config is changed.
 
-About
+Usage
 =====
 
-Unicorn is a basic config server that is responsible for your applications configuration management.
+Unicorn app consists of a root supervisor and a number of workers. When you load config file another workers starts and serves your requests.
 
-Most simple workflow is:
+Interface:
 
- - `unicorn:load/1` to start config file worker;
- - `unicorn:subscribe/2` to subscribe for config changes;
- - `unicorn:unsubscribe/1,2` to unsubscribe;
- - `unicorn:reload/1` to reload config and notify all subscribers.
- - `unicorn:unload/1` to terminate worker.
+ - `unicorn:load/3` to load config file (e.g. start worker);
+ - `unicorn:subscribe/1,2` to subscribe process for config changes;
+ - `unicorn:unsubscribe/1,2` to unsubscribe process;
+ - `unicorn:unload/1` to unload config file (e.g. stop worker);
+ - `unicorn:reload/1` to reload config file and notify subscribers.
 
-Multiple subscriptions is not an error: subscriber will receive multiple messages by number of subscriptions on config change.
+Loader and document
+===================
 
-Development usage
-=================
+Loader is function that is responsible for parsing of your config file format. Loader is second argument to `unicorn:load/3` function and is very important.
 
-Clone repository, collect deps (actually, `etoml`), run `make dev` and use standalone app.
+The one agrument of loader function is `binary()`, contents of config file. Function should return `{ok, Document} | {error, Reason}`. Document is `unicorn:document/1` term, that in fact is a term in jiffy-like json notation. This notation is a proplist with tupled "objects". For example, proplist
+
+```erlang
+[
+    {<<"foo">>, 1},
+    {<<"bar">>, [1,2,3,4]},
+    {<<"baz">>, [
+        {<<"bux">>, <<"buz">>}
+    ]}
+]
+```
+
+will be following term in jiffy-like json notation:
+
+```erlang
+{[
+    {<<"foo">>, 1},
+    {<<"bar">>, [1,2,3,4]},
+    {<<"baz">>, {[
+        {<<"bux">>, <<"buz">>}
+    ]}}
+]}
+```
+
+If your parser returns exact proplist, you can use `unicorn:to_document/1` function to transform proplist to document.
+
+Validator
+=========
+
+Validator is another function, that is passed to `unicorn:load/3` function. Validator is responsible for config file validation stuff.
+
+The one argument of validator function is `unicorn:document/0` term. Function should return `{ok, Document} | {error, ErrorList}`. As validation routines are optional, you can use `fun(Document) -> {ok, Document} end.` fun to stub validation.
+
+`ErrorList` is obviously a list of errors. This list will return on erroneous `unicorn:load/3` and `unicorn:reload/1` calls.
+
+Test usage
+==========
+
+Test unicorn launch uses TOML as config format (usin `etoml` as parser) and `jiffy_v` as validator.
+
+Clone repository, run `make dev` and use standalone app.
 
 Load `priv/test.toml` file and subscribe for changes:
 
 ```erlang
-shizz@shizz-worktop:~/code/__my/local/unicorn [develop [68b9714] MOD UTR] > make dev
-rebar -DDEBUG compile
+$ make dev
+rebar -Crebar_dev.config get-deps
+==> etoml (get-deps)
+==> jiffy_v (get-deps)
+==> unicorn (get-deps)
+rebar -Crebar_dev.config -DUNICORN_DEVEL compile
 ==> etoml (compile)
-==> unicorn (compile)
-Compiled src/unicorn_worker.erl
-erl -sname unicorn -cookie unicorn -pa ebin -pa deps/etoml/ebin -s unicorn dev_start
-Erlang R15B02 (erts-5.9.2) [source] [smp:4:4] [async-threads:0] [hipe] [kernel-poll:false]
+==> jiffy_v (compile)==> unicorn (compile)erl -sname unicorn -cookie unicorn -pa ebin -pa deps/etoml/ebin -pa deps/jiffy_v/ebin -s unicorn dev_startErlang R16B03-1 (erts-5.10.4) [source] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false]
 
-Eshell V5.9.2  (abort with ^G)
+Eshell V5.10.4  (abort with ^G)
 (unicorn@shizz-worktop)1> unicorn:load(<<"priv/test.toml">>).
 [unicorn debug] 'priv/test.toml' started for '<<"priv/test.toml">>' file
 ok
@@ -46,10 +87,10 @@ ok
 ok
 ```
 
-After that copy `test2.toml` to `test.toml` or just make some changes to the file:
+After that make some changes in the file:
 
 ```sh
-shizz@shizz-worktop:~/code/__my/local/unicorn [develop [68b9714] MOD UTR] > cp priv/test2.toml priv/test.toml
+$ cp priv/test3.toml priv/test.toml
 ```
 
 Reload config and get some incoming messages:
@@ -104,11 +145,9 @@ ok
 (unicorn@shizz-worktop)8>
 ```
 
+Test usage can be found in `unicorn.erl` file in `-ifdef(UNICORN_DEVEL).` section.
+
 ToDo
 ====
 
-Things to do are:
-
- - Write documentation
- - Write specs
  - Write tests
