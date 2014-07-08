@@ -4,6 +4,7 @@
 -define(UNSUBSCRIBE(Pid), {unsubscribe, Pid}).
 -define(UNSUBSCRIBE(Pid, Path), {unsubscribe, Pid, Path}).
 -define(RELOAD, {reload}).
+-define(GET(Path), {get, Path}).
 -define(LIST_SUBSCRIBERS, {list_subscribers}).
 -define(TERMINATE, {terminate}).
 

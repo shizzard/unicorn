@@ -2,7 +2,10 @@
 
 -include("unicorn.hrl").
 
--export([load/3, unload/1, subscribe/2, unsubscribe/1, unsubscribe/2, reload/1, get/2, to_document/1]).
+-export([
+    load/3, unload/1, subscribe/2, unsubscribe/1, unsubscribe/2, reload/1, get/2,
+    get_path/2, to_document/1
+]).
 
 -ifdef(UNICORN_DEVEL).
     -export([dev_start/0, dev_loader/1, dev_validator/1]).
@@ -85,23 +88,29 @@ reload(File) when is_binary(File) ->
 
 
 
--spec get(Path :: path(), Document :: document()) ->
+get(File, Path) ->
+    ProcName = ?FILE_TO_NAME(File),
+    gen_server:call(ProcName, ?GET(Path)).
+
+
+
+-spec get_path(Path :: path(), Document :: document()) ->
     {ok, Value :: any()} | {error, undefined}.
-get(_Path, undefined) ->
+get_path(_Path, undefined) ->
     {error, undefined};
 
-get(Key, Value) when not is_list(Key) ->
-    get([Key], Value);
+get_path(Key, Value) when not is_list(Key) ->
+    get_path([Key], Value);
 
-get([], Value) ->
+get_path([], Value) ->
     {ok, Value};
 
-get([Key | Path], {Proplist}) ->
+get_path([Key | Path], {Proplist}) ->
     Struct = proplists:get_value(Key, Proplist),
-    get(Path, Struct);
+    get_path(Path, Struct);
 
-get(Path, _Value) ->
-    get(Path, undefined).
+get_path(Path, _Value) ->
+    get_path(Path, undefined).
 
 
 
