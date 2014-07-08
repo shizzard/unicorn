@@ -73,7 +73,7 @@ init([File, ProcName, Loader, Validator]) ->
     {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
     {stop, Reason :: term(), NewState :: #state{}}.
 handle_call(?SUBSCRIBE(Pid, Path), _From, State) ->
-    case  unicorn:get(Path, State#state.document) of
+    case unicorn:get_path(Path, State#state.document) of
         {error, undefined} ->
             {reply, {error, not_found}, State};
         {ok, Value} ->
@@ -131,6 +131,14 @@ handle_call(?RELOAD, _From, State) ->
             {{error, Reason}, State}
     end,
     {reply, Reply, NewState};
+
+handle_call(?GET(Path), _From, State) ->
+    case unicorn:get_path(Path, State#state.document) of
+        {error, undefined} ->
+            {reply, {error, not_found}, State};
+        {ok, Value} ->
+            {reply, {ok, Value}, State}
+    end;
 
 handle_call(?LIST_SUBSCRIBERS, _From, State) ->
     {reply, State#state.subscribers, State};
@@ -261,11 +269,11 @@ do_diff(_File, _Path, _Document, NewDocument) ->
     NumNotified :: integer().
 do_notify(File, Diff, Document, Subscribers) ->
     lists:foldl(fun({Pid, Path, _Ref}, Acc) ->
-        case unicorn:get(Path, Diff) of
+        case unicorn:get_path(Path, Diff) of
             {error, undefined} ->
                 Acc;
             {ok, SubDiff} ->
-                {ok, SubDocument} = unicorn:get(Path, Document),
+                {ok, SubDocument} = unicorn:get_path(Path, Document),
                 Pid ! ?UNICORN_NOTIFY(File, Path, SubDiff, SubDocument),
                 Acc + 1
         end
