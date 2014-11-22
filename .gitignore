@@ -1,5 +1,6 @@
 .idea
 *.iml
+ebin/*
 deps
 *.o
 *.beam

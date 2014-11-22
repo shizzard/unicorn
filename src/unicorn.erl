@@ -94,7 +94,7 @@ get(File, Path) ->
 
 
 
--spec get_path(Path :: path(), Document :: document()) ->
+-spec get_path(Path :: path(), Document :: document() | undefined) ->
     {ok, Value :: any()} | {error, undefined}.
 get_path(_Path, undefined) ->
     {error, undefined};
