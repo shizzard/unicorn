@@ -3,7 +3,7 @@
 -include("unicorn.hrl").
 
 -export([
-    load/3, unload/1, subscribe/2, unsubscribe/1, unsubscribe/2, reload/1, get/2,
+    load/3, load_document/3, unload/1, subscribe/2, unsubscribe/1, unsubscribe/2, reload/1, get/2,
     get_path/2, to_document/1
 ]).
 
@@ -16,6 +16,7 @@
 -type document_list() :: list(Item :: document()).
 -type document_scalar() :: binary() | integer() | float() | boolean().
 
+-type procname() :: atom().
 -type loader() :: fun((binary()) -> {ok, document()} | error()).
 -type validator() :: fun((document()) -> {ok, document()} | error()).
 
@@ -24,7 +25,7 @@
 -type error() :: {error, Reason :: any()}.
 
 -export_type([document/0, document_object/0, document_list/0, document_scalar/0]).
--export_type([loader/0, validator/0, filename/0, path/0, error/0]).
+-export_type([procname/0, loader/0, validator/0, filename/0, path/0, error/0]).
 
 
 
@@ -38,7 +39,7 @@ load(File, Loader, Validator) when is_binary(File), is_function(Loader, 1), is_f
     ProcName = ?FILE_TO_NAME(File),
     case whereis(ProcName) of
         undefined ->
-            case supervisor:start_child(unicorn_sup, [File, Loader, Validator]) of
+            case supervisor:start_child(unicorn_worker_sup, [File, Loader, Validator]) of
                 {ok, _Pid} ->
                     ok;
                 {error, Reason} ->
@@ -46,6 +47,21 @@ load(File, Loader, Validator) when is_binary(File), is_function(Loader, 1), is_f
             end;
         _Pid ->
             ok
+    end.
+
+-spec load_document(ProcName :: procname(), Document :: document(), Validator :: validator()) ->
+    ok | error().
+load_document(ProcName, Document, Validator) when is_atom(ProcName), is_function(Validator, 1)  ->
+    case whereis(ProcName) of
+        undefined ->
+            case supervisor:start_child(unicorn_nofile_worker_sup, [ProcName, Document, Validator]) of
+                {ok, _Pid} ->
+                    ok;
+                {error, Reason} ->
+                    {error, Reason}
+            end;
+        _Pid ->
+            {error, duplicate_name}
     end.
 
 
@@ -88,8 +104,17 @@ reload(File) when is_binary(File) ->
 
 
 
-get(File, Path) ->
+-spec get
+    (File :: filename(), Path :: path()) ->
+        {ok, Document :: document()} | {error, not_found};
+    (ProcName :: procname(), Path :: path()) ->
+        {ok, Document :: document()} | {error, not_found}.
+
+get(File, Path) when is_binary(File), is_list(Path) ->
     ProcName = ?FILE_TO_NAME(File),
+    gen_server:call(ProcName, ?GET(Path));
+
+get(ProcName, Path) when is_atom(ProcName), is_list(Path) ->
     gen_server:call(ProcName, ?GET(Path)).
 
 
@@ -256,7 +281,7 @@ is_proplist(_Item) ->
         end, binary:split(Value, <<$.>>, [global])),
         IsFourOctets = 4 == length(Octets),
         IsOctetsBindingOk = lists:all(fun
-            (Octet) when 0 < Octet, 256 > Octet -> true;
+            (Octet) when 0 =< Octet, 255 >= Octet -> true;
             (_Octet) -> false
         end, Octets),
         if
