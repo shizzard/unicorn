@@ -106,18 +106,14 @@ reload(File) when is_binary(File) ->
 
 
 
--spec get(File :: filename(), Path :: path()) ->
+-spec get(Descriptor :: filename() | procname(), Path :: path()) ->
     {ok, Document :: document()} | {error, not_found}.
-get(File, Path) when is_binary(File), is_list(Path) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?GET(Path)).
+get(Descriptor, Path) when is_binary(Descriptor), is_list(Path) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?GET(Path));
 
-
-
--spec get_document(ProcName :: procname(), Path :: path()) ->
-    {ok, Document :: document()} | {error, not_found}.
-get_document(ProcName, Path) when is_atom(ProcName), is_list(Path) ->
-    gen_server:call(ProcName, ?GET(Path)).
+get(Descriptor, Path) when is_atom(Descriptor), is_list(Path) ->
+    gen_server:call(Descriptor, ?GET(Path)).
 
 
 
