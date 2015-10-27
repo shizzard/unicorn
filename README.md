@@ -61,8 +61,8 @@ Events
 
 Events are described in `include/unicorn_client.hrl` file. Those two events are obvious and will be sent to corresponding process in config reload and config unload respectively.
 
-Test usage
-==========
+Test usage (file based)
+=======================
 
 Test unicorn launch uses TOML as config format (usin `etoml` as parser) and `jiffy_v` as validator.
 
@@ -78,7 +78,9 @@ rebar -Crebar_dev.config get-deps
 ==> unicorn (get-deps)
 rebar -Crebar_dev.config -DUNICORN_DEVEL compile
 ==> etoml (compile)
-==> jiffy_v (compile)==> unicorn (compile)erl -sname unicorn -cookie unicorn -pa ebin -pa deps/etoml/ebin -pa deps/jiffy_v/ebin -s unicorn dev_startErlang R16B03-1 (erts-5.10.4) [source] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false]
+==> jiffy_v (compile)==> unicorn (compile)erl -sname unicorn -cookie unicorn -pa ebin -pa deps/etoml/ebin -pa deps/jiffy_v/ebin -s unicorn dev_start
+
+Erlang R16B03-1 (erts-5.10.4) [source] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false]
 
 Eshell V5.10.4  (abort with ^G)
 (unicorn@shizz-worktop)1> unicorn:load(<<"priv/test.toml">>, fun unicorn:dev_loader/1, fun unicorn:dev_validator/1).
@@ -148,6 +150,41 @@ Shell got {unicorn_terminate,<<"priv/test.toml">>,[<<"worker">>]}
 ok
 (unicorn@shizz-worktop)8>
 (unicorn@shizz-worktop)8>
+```
+
+Test usage (document based)
+===========================
+
+```erlang
+(unicorn@shizz-worktop)8> {ok, Raw} = file:read_file(<<"priv/test.toml">>).
+{ok,<<"version = \"2.7.13\"\n\n[database]\n    server = \"1.2.3.4\"\n    port = 1234\n    pool_size = 100\n    max_overflow ="...>>}
+(unicorn@shizz-worktop)10> {ok, Doc} = unicorn:dev_loader(Raw).
+{ok,{[{<<"version">>,<<"2.7.13">>},
+      {<<"database">>,
+       {[{<<"max_overflow">>,200},
+         {<<"pool_size">>,100},
+         {<<"port">>,1234},
+         {<<"server">>,<<"1.2.3.4">>}]}},
+      {<<"binding">>,
+       {[{<<"proto2">>,
+          {[{<<"conn_timeout">>,450},{<<"ports">>,[8713,8714,8715]}]}},
+         {<<"proto1">>,
+          {[{<<"conn_timeout">>,500},
+            {<<"ports">>,[7713,7714,7715]}]}}]}},
+      {<<"worker">>,
+       {[{<<"proto2">>,
+          {[{<<"transaction_loglevel">>,7},
+            {<<"max_overflow">>,200},
+            {<<"pool_size">>,400}]}},
+         {<<"proto1">>,
+          {[{<<"transaction_loglevel">>,2},
+            {<<"max_overflow">>,200},
+            {<<"pool_size">>,300}]}}]}}]}}
+(unicorn@shizz-worktop)11> unicorn:load_document(foo, Doc, fun unicorn:dev_validator/1).
+[unicorn debug] foo started
+ok
+(unicorn@shizz-worktop)12> unicorn:get(foo, [<<"database">>, <<"server">>]).
+{ok,{1,2,3,4}}
 ```
 
 Test usage can be found in `unicorn.erl` file in `-ifdef(UNICORN_DEVEL).` section.

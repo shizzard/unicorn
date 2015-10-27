@@ -3,7 +3,7 @@
 -include("unicorn.hrl").
 
 -export([
-    load/3, unload/1, subscribe/2, unsubscribe/1, unsubscribe/2, reload/1, get/2,
+    load/3, load_document/3, unload/1, subscribe/2, unsubscribe/1, unsubscribe/2, reload/1, get/2,
     get_path/2, to_document/1
 ]).
 
@@ -16,6 +16,7 @@
 -type document_list() :: list(Item :: document()).
 -type document_scalar() :: binary() | integer() | float() | boolean().
 
+-type procname() :: atom().
 -type loader() :: fun((binary()) -> {ok, document()} | error()).
 -type validator() :: fun((document()) -> {ok, document()} | error()).
 
@@ -24,7 +25,7 @@
 -type error() :: {error, Reason :: any()}.
 
 -export_type([document/0, document_object/0, document_list/0, document_scalar/0]).
--export_type([loader/0, validator/0, filename/0, path/0, error/0]).
+-export_type([procname/0, loader/0, validator/0, filename/0, path/0, error/0]).
 
 
 
@@ -38,7 +39,7 @@ load(File, Loader, Validator) when is_binary(File), is_function(Loader, 1), is_f
     ProcName = ?FILE_TO_NAME(File),
     case whereis(ProcName) of
         undefined ->
-            case supervisor:start_child(unicorn_sup, [File, Loader, Validator]) of
+            case supervisor:start_child(unicorn_worker_sup, [File, Loader, Validator]) of
                 {ok, _Pid} ->
                     ok;
                 {error, Reason} ->
@@ -50,47 +51,84 @@ load(File, Loader, Validator) when is_binary(File), is_function(Loader, 1), is_f
 
 
 
--spec unload(File :: filename()) ->
+-spec load_document(ProcName :: procname(), Document :: document(), Validator :: validator()) ->
+    ok | error().
+load_document(ProcName, Document, Validator) when is_atom(ProcName), is_function(Validator, 1)  ->
+    case whereis(ProcName) of
+        undefined ->
+            case supervisor:start_child(unicorn_nofile_worker_sup, [ProcName, Document, Validator]) of
+                {ok, _Pid} ->
+                    ok;
+                {error, Reason} ->
+                    {error, Reason}
+            end;
+        _Pid ->
+            {error, duplicate_name}
+    end.
+
+
+
+-spec unload(Descriptor :: filename() | procname()) ->
     ok.
-unload(File) when is_binary(File) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:cast(ProcName, ?TERMINATE).
+unload(Descriptor) when is_binary(Descriptor) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:cast(ProcName, ?TERMINATE);
+
+unload(Descriptor) when is_atom(Descriptor) ->
+    gen_server:cast(Descriptor, ?TERMINATE).
 
 
 
--spec subscribe(File :: filename(), Path :: list(binary())) ->
+-spec subscribe(Descriptor :: filename() | procname(), Path :: list(binary())) ->
     {ok, Config :: document()} | error().
-subscribe(File, Path) when is_binary(File), is_list(Path) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?SUBSCRIBE(self(), Path)).
+subscribe(Descriptor, Path) when is_binary(Descriptor), is_list(Path) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?SUBSCRIBE(self(), Path));
+
+subscribe(Descriptor, Path) when is_atom(Descriptor), is_list(Path) ->
+    gen_server:call(Descriptor, ?SUBSCRIBE(self(), Path)).
 
 
 
--spec unsubscribe(File :: filename()) ->
+-spec unsubscribe(Descriptor :: filename() | procname()) ->
     ok.
-unsubscribe(File) when is_binary(File) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?UNSUBSCRIBE(self())).
+unsubscribe(Descriptor) when is_binary(Descriptor) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?UNSUBSCRIBE(self()));
 
--spec unsubscribe(File :: binary(), Path :: path()) ->
+unsubscribe(Descriptor) when is_atom(Descriptor) ->
+    gen_server:call(Descriptor, ?UNSUBSCRIBE(self())).
+
+-spec unsubscribe(Descriptor :: filename() | procname(), Path :: path()) ->
     ok.
-unsubscribe(File, Path) when is_binary(File), is_list(Path) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?UNSUBSCRIBE(self(), Path)).
+unsubscribe(Descriptor, Path) when is_binary(Descriptor), is_list(Path) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?UNSUBSCRIBE(self(), Path));
+
+unsubscribe(Descriptor, Path) when is_atom(Descriptor), is_list(Path) ->
+    gen_server:call(Descriptor, ?UNSUBSCRIBE(self(), Path)).
 
 
 
--spec reload(File :: filename()) ->
+-spec reload(Descriptor :: filename() | procname()) ->
     {ok, NumNotified :: integer()}.
-reload(File) when is_binary(File) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?RELOAD).
+reload(Descriptor) when is_binary(Descriptor) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?RELOAD);
+
+reload(Descriptor) when is_atom(Descriptor) ->
+    gen_server:call(Descriptor, ?RELOAD).
 
 
 
-get(File, Path) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?GET(Path)).
+-spec get(Descriptor :: filename() | procname(), Path :: path()) ->
+    {ok, Document :: document()} | {error, not_found}.
+get(Descriptor, Path) when is_binary(Descriptor), is_list(Path) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?GET(Path));
+
+get(Descriptor, Path) when is_atom(Descriptor), is_list(Path) ->
+    gen_server:call(Descriptor, ?GET(Path)).
 
 
 
@@ -256,7 +294,7 @@ is_proplist(_Item) ->
         end, binary:split(Value, <<$.>>, [global])),
         IsFourOctets = 4 == length(Octets),
         IsOctetsBindingOk = lists:all(fun
-            (Octet) when 0 < Octet, 256 > Octet -> true;
+            (Octet) when 0 =< Octet, 255 >= Octet -> true;
             (_Octet) -> false
         end, Octets),
         if
