@@ -68,41 +68,56 @@ load_document(ProcName, Document, Validator) when is_atom(ProcName), is_function
 
 
 
--spec unload(File :: filename()) ->
+-spec unload(Descriptor :: filename() | procname()) ->
     ok.
-unload(File) when is_binary(File) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:cast(ProcName, ?TERMINATE).
+unload(Descriptor) when is_binary(Descriptor) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:cast(ProcName, ?TERMINATE);
+
+unload(Descriptor) when is_atom(Descriptor) ->
+    gen_server:cast(Descriptor, ?TERMINATE).
 
 
 
--spec subscribe(File :: filename(), Path :: list(binary())) ->
+-spec subscribe(Descriptor :: filename() | procname(), Path :: list(binary())) ->
     {ok, Config :: document()} | error().
-subscribe(File, Path) when is_binary(File), is_list(Path) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?SUBSCRIBE(self(), Path)).
+subscribe(Descriptor, Path) when is_binary(Descriptor), is_list(Path) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?SUBSCRIBE(self(), Path));
+
+subscribe(Descriptor, Path) when is_atom(Descriptor), is_list(Path) ->
+    gen_server:call(Descriptor, ?SUBSCRIBE(self(), Path)).
 
 
 
--spec unsubscribe(File :: filename()) ->
+-spec unsubscribe(Descriptor :: filename() | procname()) ->
     ok.
-unsubscribe(File) when is_binary(File) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?UNSUBSCRIBE(self())).
+unsubscribe(Descriptor) when is_binary(Descriptor) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?UNSUBSCRIBE(self()));
 
--spec unsubscribe(File :: binary(), Path :: path()) ->
+unsubscribe(Descriptor) when is_atom(Descriptor) ->
+    gen_server:call(Descriptor, ?UNSUBSCRIBE(self())).
+
+-spec unsubscribe(Descriptor :: filename() | procname(), Path :: path()) ->
     ok.
-unsubscribe(File, Path) when is_binary(File), is_list(Path) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?UNSUBSCRIBE(self(), Path)).
+unsubscribe(Descriptor, Path) when is_binary(Descriptor), is_list(Path) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?UNSUBSCRIBE(self(), Path));
+
+unsubscribe(Descriptor, Path) when is_atom(Descriptor), is_list(Path) ->
+    gen_server:call(Descriptor, ?UNSUBSCRIBE(self(), Path)).
 
 
 
--spec reload(File :: filename()) ->
+-spec reload(Descriptor :: filename() | procname()) ->
     {ok, NumNotified :: integer()}.
-reload(File) when is_binary(File) ->
-    ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?RELOAD).
+reload(Descriptor) when is_binary(Descriptor) ->
+    ProcName = ?FILE_TO_NAME(Descriptor),
+    gen_server:call(ProcName, ?RELOAD);
+
+reload(Descriptor) when is_atom(Descriptor) ->
+    gen_server:call(Descriptor, ?RELOAD).
 
 
 

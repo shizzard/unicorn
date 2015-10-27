@@ -158,8 +158,6 @@ Test usage (document based)
 ```erlang
 (unicorn@shizz-worktop)8> {ok, Raw} = file:read_file(<<"priv/test.toml">>).
 {ok,<<"version = \"2.7.13\"\n\n[database]\n    server = \"1.2.3.4\"\n    port = 1234\n    pool_size = 100\n    max_overflow ="...>>}
-(unicorn@shizz-worktop)9> f(Doc).
-ok
 (unicorn@shizz-worktop)10> {ok, Doc} = unicorn:dev_loader(Raw).
 {ok,{[{<<"version">>,<<"2.7.13">>},
       {<<"database">>,
