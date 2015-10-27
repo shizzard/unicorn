@@ -49,6 +49,8 @@ load(File, Loader, Validator) when is_binary(File), is_function(Loader, 1), is_f
             ok
     end.
 
+
+
 -spec load_document(ProcName :: procname(), Document :: document(), Validator :: validator()) ->
     ok | error().
 load_document(ProcName, Document, Validator) when is_atom(ProcName), is_function(Validator, 1)  ->
@@ -104,17 +106,17 @@ reload(File) when is_binary(File) ->
 
 
 
--spec get
-    (File :: filename(), Path :: path()) ->
-        {ok, Document :: document()} | {error, not_found};
-    (ProcName :: procname(), Path :: path()) ->
-        {ok, Document :: document()} | {error, not_found}.
-
+-spec get(File :: filename(), Path :: path()) ->
+    {ok, Document :: document()} | {error, not_found}.
 get(File, Path) when is_binary(File), is_list(Path) ->
     ProcName = ?FILE_TO_NAME(File),
-    gen_server:call(ProcName, ?GET(Path));
+    gen_server:call(ProcName, ?GET(Path)).
 
-get(ProcName, Path) when is_atom(ProcName), is_list(Path) ->
+
+
+-spec get_document(ProcName :: procname(), Path :: path()) ->
+    {ok, Document :: document()} | {error, not_found}.
+get_document(ProcName, Path) when is_atom(ProcName), is_list(Path) ->
     gen_server:call(ProcName, ?GET(Path)).
 
 
